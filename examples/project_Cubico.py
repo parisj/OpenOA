@@ -303,6 +303,8 @@ def prepare(asset: str = "kelmarsh", return_value: str = "plantdata") -> PlantDa
         lon=asset_df["Longitude"].mean(),
         save_pathname=f"{path}/era5_monthly_10m/",
         save_filename=f"{asset}_era5_monthly_10m",
+        start_date="2016-01",
+        end_date="2021-12",
     )
 
     logger.info("Reading ERA5 monthly")
@@ -318,6 +320,8 @@ def prepare(asset: str = "kelmarsh", return_value: str = "plantdata") -> PlantDa
         lon=asset_df["Longitude"].mean(),
         save_pathname=f"{path}/merra2_monthly_10m/",
         save_filename=f"{asset}_merra2_monthly_10m",
+        start_date="2016-01",
+        end_date="2021-12",
     )
 
     logger.info("Reading MERRA2 monthly")
@@ -340,6 +344,7 @@ def prepare(asset: str = "kelmarsh", return_value: str = "plantdata") -> PlantDa
             "longitude": "Longitude",
             "rated_power": "Rated power (kW)",
             "rotor_diameter": "Rotor Diameter (m)",
+            "asset_id": "Title",
         },
         "curtail": {
             "IAVL_DnWh": "Lost Production to Downtime (kWh)",
@@ -396,6 +401,7 @@ def prepare(asset: str = "kelmarsh", return_value: str = "plantdata") -> PlantDa
             "WTUR_W": "Power (kW)",
             "frequency": "10T",
             "time": "Timestamp",
+            "asset_id": "Turbine",
         },
     }
 
