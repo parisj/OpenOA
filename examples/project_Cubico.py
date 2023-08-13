@@ -133,6 +133,8 @@ def get_scada_df(scada_headers: pd.DataFrame, use_columns: list[str] | None = No
             "Nacelle position (°)",
             "Nacelle ambient temperature (°C)",
             "Blade angle (pitch position) A (°)",
+            "Vane position 1+2 (°)",
+            
         ]
 
     csv_params = {
@@ -297,15 +299,15 @@ def prepare(asset: str = "kelmarsh", return_value: str = "plantdata") -> PlantDa
         reanalysis_dict.update(dict(era5=reanalysis_era5_df))
 
     # ERA5 monthly 10m from CDS
-    logger.info("Downloading ERA5 monthly")
-    downloader.get_era5_monthly(
-        lat=asset_df["Latitude"].mean(),
-        lon=asset_df["Longitude"].mean(),
-        save_pathname=f"{path}/era5_monthly_10m/",
-        save_filename=f"{asset}_era5_monthly_10m",
-        start_date="2016-01",
-        end_date="2021-12",
-    )
+    #logger.info("Downloading ERA5 monthly")
+    #downloader.get_era5_monthly(
+    #    lat=asset_df["Latitude"].mean(),
+    #    lon=asset_df["Longitude"].mean(),
+    #    save_pathname=f"{path}/era5_monthly_10m/",
+    #    save_filename=f"{asset}_era5_monthly_10m",
+    #    start_date="2016-01",
+    #    end_date="2021-12",
+    #)
 
     logger.info("Reading ERA5 monthly")
     reanalysis_era5_monthly_df = pd.read_csv(
@@ -313,16 +315,16 @@ def prepare(asset: str = "kelmarsh", return_value: str = "plantdata") -> PlantDa
     )
     reanalysis_dict.update(dict(era5_monthly=reanalysis_era5_monthly_df))
 
-    # MERRA2 monthly 10m from GES DISC
-    logger.info("Downloading MERRA2 monthly")
-    downloader.get_merra2_monthly(
-        lat=asset_df["Latitude"].mean(),
-        lon=asset_df["Longitude"].mean(),
-        save_pathname=f"{path}/merra2_monthly_10m/",
-        save_filename=f"{asset}_merra2_monthly_10m",
-        start_date="2016-01",
-        end_date="2021-12",
-    )
+    ## MERRA2 monthly 10m from GES DISC
+    #logger.info("Downloading MERRA2 monthly")
+    #downloader.get_merra2_monthly(
+    #    lat=asset_df["Latitude"].mean(),
+    #    lon=asset_df["Longitude"].mean(),
+    #    save_pathname=f"{path}/merra2_monthly_10m/",
+    #    save_filename=f"{asset}_merra2_monthly_10m",
+    #    start_date="2016-01",
+    #    end_date="2021-12",
+    #)
 
     logger.info("Reading MERRA2 monthly")
     reanalysis_merra2_monthly_df = pd.read_csv(
@@ -402,6 +404,7 @@ def prepare(asset: str = "kelmarsh", return_value: str = "plantdata") -> PlantDa
             "frequency": "10T",
             "time": "Timestamp",
             "asset_id": "Turbine",
+            "WMET_HorWdDirRel": "Vane position 1+2 (°)",
         },
     }
 
@@ -437,3 +440,4 @@ def prepare(asset: str = "kelmarsh", return_value: str = "plantdata") -> PlantDa
 
 if __name__ == "__main__":
     prepare()
+

@@ -28,6 +28,10 @@ def offset_to_seconds(offset: int | float | str | np.datetime64) -> int | float:
     try:
         seconds = pd.to_timedelta(offset).total_seconds()
     except ValueError:  # Needs a leading number or the above will fail
+        if offset== 'M':
+            offset= '31D'
+        if offset == 'Y':
+            offset = '365D'
         seconds = pd.to_timedelta(f"1{offset}").total_seconds()
     return seconds
 
