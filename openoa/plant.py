@@ -804,7 +804,7 @@ class PlantData:
         for name, df in data_dict.items():
             if df is None:
                 continue
-
+# TODO fix frequency of Months and years
             if name in ("scada", "status", "tower"):
                 actual_frequencies[name] = ts.determine_frequency(df, "time")
             elif name in ("meter", "curtail"):
