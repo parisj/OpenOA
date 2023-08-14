@@ -393,6 +393,7 @@ class StaticYawMisalignment(FromDictMixin):
 
         # Limit to pitch angles below the specified threshold
         self._df_turb = self._df_turb.loc[self._df_turb["WROT_BlPthAngVal"] <= self._pitch_thresh]
+        self._df_turb = self._df_turb[~self._df_turb.index.duplicated(keep='first')]
 
         # Apply bin-based filter to flag samples for which wind speed is greater than a threshold from the median
         # wind speed in each power bin

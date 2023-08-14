@@ -323,7 +323,7 @@ def cluster_mahalanobis_2d(
         mahalanobis_dist = cluster.apply(
             lambda r: sp.spatial.distance.mahalanobis(r.values, centroid, invcovmx), axis=1
         )
-
+    
         # Flag data outside the distance threshold
         flag_bin = mahalanobis_dist > dist_thresh
 
