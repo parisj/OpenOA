@@ -181,13 +181,21 @@ def filter_data(project: PlantData, pitch_threshold: float = 1.5,
 
 if __name__ == "__main__":
     #first time run should be with load = True to create the data files
+
     project = setup(time_range=(2019,2021), asset="kelmarsh", load=False)
     
     #fix problem with duplicated index
     project.scada = project.scada[~project.scada.index.duplicated(keep='first')]
     
     plot_project_bld_ptch_ang(project=project)
-    flag_bins = filter_data(project=project)
+    
+    power_bin_mad_thresh = 7.0
+    pitch_threshold = 1.5
+    
+    flag_bins = filter_data(project=project, 
+                            pitch_threshold=pitch_threshold, 
+                            power_bin_mad_thresh=power_bin_mad_thresh)
+    
     plot_project_pwr_crv(project=project, flag=flag_bins)
     
     #start the yaw misalignment analysis
@@ -195,8 +203,7 @@ if __name__ == "__main__":
                                     turbine_ids=None,
                                     UQ=False,
                                     )
-    power_bin_mad_thresh = 7.0
-    pitch_threshold = 1.5
+
     yaw_mis.run(
     num_sim = 1,
     #num_sim = 100,
