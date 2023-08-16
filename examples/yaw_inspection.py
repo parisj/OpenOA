@@ -135,7 +135,7 @@ def setup(time_range: Union[Tuple[int, int], int],
           asset: str, load: bool = True) -> PlantData:
     
     if load:
-        load_data(time_range=time_range, asset=asset)   
+        load_data(asset=asset)   
         
     project = read_data(time_range=time_range, asset=asset)
     project.analysis_type.append("StaticYawMisalignment")
@@ -147,7 +147,6 @@ def filter_data(project: PlantData, pitch_threshold: float = 1.5,
                 power_bin_mad_thresh: float = 7.0) -> PlantData:
 
     flag_bins = {}
-    project.scada = project.scada[project.scada["WROT_BlPthAngVal"] <= pitch_threshold]
 
     for t in project.turbine_ids:
 
@@ -182,7 +181,7 @@ def filter_data(project: PlantData, pitch_threshold: float = 1.5,
 if __name__ == "__main__":
     #first time run should be with load = True to create the data files
 
-    project = setup(time_range=(2019,2021), asset="kelmarsh", load=False)
+    project = setup(time_range=(2019,2021), asset="penmanshiel", load=True)
     
     #fix problem with duplicated index
     project.scada = project.scada[~project.scada.index.duplicated(keep='first')]
@@ -201,7 +200,7 @@ if __name__ == "__main__":
     #start the yaw misalignment analysis
     yaw_mis = StaticYawMisalignment(plant=project,
                                     turbine_ids=None,
-                                    UQ=False,
+                                    UQ=True,
                                     )
 
     yaw_mis.run(
