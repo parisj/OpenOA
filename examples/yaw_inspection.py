@@ -13,6 +13,8 @@ from openoa import PlantData
 from openoa.utils import plot, filters
 import project_Cubico
 import pickle
+import math 
+
 
  
 def load_data(asset: str = "kelmarsh") -> None:
@@ -75,9 +77,9 @@ def plot_farm_2d(project: PlantData,
                  **kwargs) -> None:
     
     num_turbines = len(project.turbine_ids)
-    num_columns = num_turbines // 2  # Ceiling division to get the number of columns
-
-    fig, axs = plt.subplots(nrows=2,
+    num_columns = min(4, num_turbines)
+    num_rows = math.ceil(num_turbines / num_columns)
+    fig, axs = plt.subplots(nrows=num_rows,
                             ncols=num_columns, 
                             figsize=(f_size_x*num_columns, f_size_y*num_turbines//num_columns))
 
@@ -91,7 +93,9 @@ def plot_farm_2d(project: PlantData,
 
         ax.scatter(project.scada.loc[(slice(None), t), x],
                    project.scada.loc[(slice(None), t), y], **kwargs)
-        if flag is not None and ~np.any(flag[t]):
+        if flag is not None and t in flag and ~np.any(flag[t]):
+            flag[t] = flag[t].reindex(project.scada.loc[(slice(None), t), x].index, fill_value=False)
+
             ax.scatter(project.scada.loc[(slice(None), t), x].loc[flag[t]],
                        project.scada.loc[(slice(None), t), y].loc[flag[t]],
                        color='r', **kwargs)
@@ -151,7 +155,7 @@ def filter_data(project: PlantData, pitch_threshold: float = 1.5,
     for t in project.turbine_ids:
 
         df_sub = project.scada.loc[(slice(None), t),:]
-        out_of_window = filters.window_range_flag(df_sub["WMET_HorWdSpd"], 5., 40,df_sub["WTUR_W"], 20., 2050.)
+        out_of_window = filters.window_range_flag(df_sub["WMET_HorWdSpd"], 5., 40,df_sub["WTUR_W"], 20., 2100.)
         df_sub = df_sub[~out_of_window]      
         max_bin = 0.90 * df_sub["WTUR_W"].max()
         bin_outliers = filters.bin_filter(df_sub["WTUR_W"], df_sub["WMET_HorWdSpd"], 100, 1.5, "median", 20., max_bin, "scalar", "all")
@@ -159,7 +163,8 @@ def filter_data(project: PlantData, pitch_threshold: float = 1.5,
         frozen = filters.unresponsive_flag(df_sub["WMET_HorWdSpd"], 3)
         df_sub = df_sub[~frozen]
         df_sub = df_sub[df_sub["WROT_BlPthAngVal"] <= pitch_threshold]  
-        
+        project.scada.loc[(slice(None), t),:] = df_sub
+
         # Apply power bin filter
         turb_capac = project.asset.loc[t, "rated_power"]
         flag_bin = filters.bin_filter(
@@ -174,14 +179,16 @@ def filter_data(project: PlantData, pitch_threshold: float = 1.5,
             direction="all",
         )
         flag_bins[t] = flag_bin
-        df_sub = df_sub[~flag_bin]
-        project.scada.loc[(slice(None), t),:] = df_sub
+#        df_sub = df_sub[~flag_bin]
+#        project.scada.loc[(slice(None), t),:] = df_sub
     return flag_bins
+
 
 if __name__ == "__main__":
     #first time run should be with load = True to create the data files
+    #after the first run, load = False will be much faster
 
-    project = setup(time_range=(2019,2021), asset="penmanshiel", load=True)
+    project = setup(time_range=(2019,2021), asset="penmanshiel", load=False)
     
     #fix problem with duplicated index
     project.scada = project.scada[~project.scada.index.duplicated(keep='first')]
@@ -189,9 +196,9 @@ if __name__ == "__main__":
     plot_project_bld_ptch_ang(project=project)
     
     power_bin_mad_thresh = 7.0
-    pitch_threshold = 1.5
+    pitch_threshold = 2.1
     
-    flag_bins = filter_data(project=project, 
+    flag_bins= filter_data(project=project, 
                             pitch_threshold=pitch_threshold, 
                             power_bin_mad_thresh=power_bin_mad_thresh)
     
@@ -200,7 +207,7 @@ if __name__ == "__main__":
     #start the yaw misalignment analysis
     yaw_mis = StaticYawMisalignment(plant=project,
                                     turbine_ids=None,
-                                    UQ=True,
+                                    UQ=False,
                                     )
 
     yaw_mis.run(
