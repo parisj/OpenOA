@@ -2077,7 +2077,7 @@ def plot_yaw_misalignment(
 
     for i, ws in enumerate(ws_bins):
         if UQ:
-            norm_factor = curve_fit_params_ws[:, i, 0].mean()
+            norm_factor = np.nanmean(curve_fit_params_ws[:, i, 0])
 
             y_min = np.nanmin(np.nanpercentile(power_values_vane_ws[:, i, :], 2.5, 0))
             y_max = np.nanmax(np.nanpercentile(power_values_vane_ws[:, i, :], 97.5, 0))
@@ -2099,26 +2099,26 @@ def plot_yaw_misalignment(
                 vane_bins,
                 cos_curve(
                     vane_bins,
-                    curve_fit_params_ws[:, i, 0].mean() / norm_factor,
-                    curve_fit_params_ws[:, i, 1].mean(),
-                    curve_fit_params_ws[:, i, 2].mean(),
+                    np.nanmean(curve_fit_params_ws[:, i, 0]) / norm_factor,
+                    np.nanmean(curve_fit_params_ws[:, i, 1]),
+                    np.nanmean(curve_fit_params_ws[:, i, 2]),
                 ),
                 color=curve_fit_color_code,
                 label="_nolabel_",
             )
             axs[int(np.floor(i / N_col))][i % N_col].plot(
-                2 * [curve_fit_params_ws[:, i, 1].mean()],
+                2 * [np.nanmean(curve_fit_params_ws[:, i, 1])],
                 [
                     0.01 * np.floor(y_min / norm_factor / 0.01),
                     0.01 * np.ceil(y_max / norm_factor / 0.01),
                 ],
                 color=curve_fit_color_code,
                 linestyle="--",
-                label=f"Max. Power Vane Angle = {round(curve_fit_params_ws[:,i,1].mean(),1)}$^\circ$",
+                label=f"Max. Power Vane Angle = {round(np.nanmean(curve_fit_params_ws[:,i,1]),1)}$^\circ$",
             )
 
             axs[int(np.floor(i / N_col))][i % N_col].set_title(
-                f"{ws} m/s\nYaw Misalignment = {np.round(np.mean(yaw_misalignment_ws[:,i]),1)}$^\circ$ [{np.round(np.percentile(yaw_misalignment_ws[:,i],2.5),1)}$^\circ$, {np.round(np.percentile(yaw_misalignment_ws[:,i],97.5),1)}$^\circ$]"
+                f"{ws} m/s\nYaw Misalignment = {np.round(np.nanmean(yaw_misalignment_ws[:,i]),1)}$^\circ$ [{np.round(np.percentile(yaw_misalignment_ws[:,i],2.5),1)}$^\circ$, {np.round(np.percentile(yaw_misalignment_ws[:,i],97.5),1)}$^\circ$]"
             )
         else:
             norm_factor = curve_fit_params_ws[i, 0]
