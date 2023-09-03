@@ -4,6 +4,7 @@ sys.path.append(r"./OpenOA/examples")
 from typing import Tuple, Union
 import numpy as np
 import pandas as pd
+from params import Params
 from matplotlib import pyplot as plt
 import matplotlib
 matplotlib.use('TkAgg')
@@ -15,6 +16,7 @@ import project_Cubico
 import pickle
 import math 
 import copy
+
 
  
 def load_data(asset: str = "kelmarsh") -> None:
@@ -188,7 +190,7 @@ def filter_wake_free_zones(project: PlantData, wake_free_zone: dict) -> PlantDat
     return zones
 
 def filter_data(project: PlantData, pitch_threshold: float = 1.5,
-                power_bin_mad_thresh: float = 7.0) -> PlantData:
+                power_bin_mad_thresh: float = 7.0) -> list:
 
     flag_bins = {}
 
@@ -223,87 +225,76 @@ def filter_data(project: PlantData, pitch_threshold: float = 1.5,
         project.scada.loc[(slice(None), t),:] = df_sub
     return flag_bins
 
-
-if __name__ == "__main__":
-    
-    asset = "penmanshiel"
-    #first time run should be with load = True to create the data files
-    #after the first run, load = False will be much faster
-    
-    project = setup(time_range=(2019,2021), asset=asset, load=False)
-    p = "Penmanshiel"
-
-    wake_free_zones = {
-        1: {"turb": [f"{p} 01", f"{p} 04", f"{p} 08", f"{p} 12"], "wind_d_r": (278, 8)},
-        2: {"turb": [f"{p} 02", f"{p} 13", f"{p} 14", f"{p} 15"], "wind_d_r": (348, 93)},
-        3: {"turb": [f"{p} 07", f"{p} 11", f"{p} 15"], "wind_d_r": (87, 209)},
-        4: {"turb": [f"{p} 01", f"{p} 02"], "wind_d_r": (184, 274)}
-    }
-
-    ws_bins = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
-    #fix problem with duplicated index
-    project.scada = project.scada[~project.scada.index.duplicated(keep='first')]
-    
-    #plot_project_bld_ptch_ang(project=project)
-    
-    power_bin_mad_thresh = 7.0
-    pitch_threshold = 2.1
-    UQ = True
-    
-    if UQ:
-        num_sim = 100
-        max_power_filter = (0.92,0.98)
-        power_bin_mad_thresh = (4.0, 10.0)
+def iterate_parameters(project: PlantData, params:Params)-> pd.DataFrame:
+    summary_df = pd.DataFrame(columns=["turbine", "pitch_angle" ,'zone', 'ws_bins', 'avg_yaw', 'avg_vane', 'bin_yaw_ws', 'conf_int'])
+    summary_df = summary_df.set_index(["turbine", "zone", "pitch_angle"])
+    plots_yaw = pd.DataFrame(columns=["turbine", "zone", "pitch_angle", "figure", "axes"])
+    plots_yaw = plots_yaw.set_index(["turbine", "zone", "pitch_angle"])
+    if params.iterate:
+        for pt in params.pitch_threshold: 
+            params_new = copy.deepcopy(params)
+            params_new.update_params(pitch_threshold = pt)
+            summary_df, plots_yaw = process_wake_free_zones_with_parameters(project=project, params=params_new, summary_df=summary_df, plots_yaw=plots_yaw)
     else:
-        num_sim = 1
-        max_power_filter = 0.95
-        power_bin_mad_thresh = 7.0
-        
-    filter_data(project=project, 
-                            pitch_threshold=pitch_threshold, 
-                            power_bin_mad_thresh=7)
+        summary_df, plots_yaw = process_wake_free_zones_with_parameters(project=project, params=params, summary_df=summary_df, plots_yaw=plots_yaw)
+          
+    return summary_df, plots_yaw
+
+def filter_and_prepare_data(project: PlantData, params: Params):
+    """
+    Filter and prepare the data 
+
+    Args:
+        project (PlantData): Total project data unfiltered
+        params (Params): Class params with all the params needed for the filtering
+    """
     
-    zones = filter_wake_free_zones(project=project, wake_free_zone=wake_free_zones)
-        #plot_project_bld_ptch_ang(project=project)
+    filter_data(project=project, pitch_threshold=params.pitch_threshold, power_bin_mad_thresh=7)
+    zones = filter_wake_free_zones(project=project, wake_free_zone=params.wake_free_zones)
+    return zones
 
-    for n_zone,  project_wake_free in enumerate(zones):
+def process_wake_free_zones_with_parameters(project : PlantData, params: Params, summary_df: pd.DataFrame, plots_yaw: pd.DataFrame):
+    """
+    A wrapper function to process wake free zones with specified parameters
     
-        path_power_curve = f'plots/wake_free_zone/{asset}/Zone_{n_zone+1}/zone_power_curve.png'
-        path_pitch_angle = f'plots/wake_free_zone/{asset}/Zone_{n_zone+1}/zone_pitch_angle.png'
-        plot_project_pwr_crv(project=project_wake_free, title=f"Zone {n_zone+1} - Power Curve (filtered)", path = path_power_curve)
-        plot_project_bld_ptch_ang(project=project_wake_free, title=f"Zone {n_zone+1} - Blade Pitch Angle vs Wind Speed (filtered)", path = path_pitch_angle)
 
-        #start the yaw misalignment analysis
-        yaw_mis = StaticYawMisalignment(plant=project_wake_free,
-                                        turbine_ids=None,
-                                        UQ=UQ,
-                                        )
-
-        yaw_mis.run(
-        num_sim = num_sim,
-        ws_bins = ws_bins,
-        ws_bin_width = 2.0,
-        vane_bin_width = 1.0,
-        min_vane_bin_count = 50,
-        max_abs_vane_angle = 25.0,
-        pitch_thresh = pitch_threshold,
-        max_power_filter = max_power_filter,
-        power_bin_mad_thresh = power_bin_mad_thresh,
-        #max_power_filter = 0.95,
-        #power_bin_mad_thresh = power_bin_mad_thresh,
-        use_power_coeff = False
-        )
-
-        if UQ:
-            summary_df = pd.DataFrame(columns=['zone', 'ws_bins', 'avg_yaw', 'avg_vane', 'bin_yaw_ws', 'conf_int'])
-
+    Args:
+        project (PlantData): Total project data unfiltered       
+        params (Params): params class with all the params needed for the filtering
+    """
+    zones = filter_and_prepare_data(project=project, params=params)
+    summary_df, plots_yaw = process_each_zone(zones=zones, params=params, summary_df=summary_df, plots_yaw=plots_yaw)
+    return summary_df, plots_yaw
+    
+def process_each_zone(zones: list, params: Params, summary_df: pd.DataFrame, plots_yaw: pd.DataFrame):
+    UQ = params.UQ
+    asset = params.asset
+    ws_bins = params.ws_bins
+    pitch_threshold = params.pitch_threshold
+    
+    for n_zones, project_wake_free in enumerate(zones):
+        path_power_curve = f'plots/wake_free_zone/{asset}/Zone_{n_zones+1}/zone_power_curve_pt_{pitch_threshold}.png'
+        path_pitch_angle = f'plots/wake_free_zone/{asset}/Zone_{n_zones+1}/zone_pitch_angle_pt_{pitch_threshold}.png'
+        plot_project_pwr_crv(project=project_wake_free, title=f"Zone {n_zones+1} - Power Curve (filtered)", path = path_power_curve)
+        plot_project_bld_ptch_ang(project=project_wake_free, title=f"Zone {n_zones+1} - Blade Pitch Angle vs Wind Speed (filtered)", path = path_pitch_angle)
+        yaw_mis = StaticYawMisalignment(plant=project_wake_free, turbine_ids=None, UQ=UQ)    
+        param_dict = {
+            "num_sim": params.num_sim,
+            "ws_bins": params.ws_bins,
+            "ws_bin_width": params.ws_bin_width,
+            "vane_bin_width": params.vane_bin_width,
+            "min_vane_bin_count": params.min_vane_bin_count,
+            "max_abs_vane_angle": params.max_abs_vane_angle,
+            "pitch_thresh": params.pitch_threshold,
+            "max_power_filter": params.max_power_filter,
+            "power_bin_mad_thresh": params.power_bin_mad_thresh,
+            "use_power_coeff": params.use_power_coeff,
+            }
+        print(param_dict)
+        yaw_mis.run(**param_dict)
         
-        else:
-            summary_df = pd.DataFrame(columns=['zone', 'ws_bins', 'avg_yaw', 'avg_vane', 'bin_yaw_ws'])
-
-            
         for i, t in enumerate(yaw_mis.turbine_ids):
-            file_path = f'data/{asset}/wake_free/{n_zone+1}_zone.csv' 
+            file_path = f'data/{asset}/wake_free/{n_zones+1}_zone_test_pt_{pitch_threshold}.csv' 
             print(f"Overall yaw misalignment for Turbine {t}: {np.round(yaw_mis.yaw_misalignment[i],1)} degrees")
             
             if UQ: 
@@ -322,6 +313,80 @@ if __name__ == "__main__":
                 avg_vane = np.nanmean(yaw_mis.mean_vane_angle_ws[:, i, :], 0)
                 bin_yaw_ws = np.nanmean(yaw_mis.yaw_misalignment_ws[:,i,:], 0)
                 avg_yaw = np.nanmean(yaw_mis.yaw_misalignment[:,0])
+                
+                summary_df.loc[t, n_zones+1, pitch_threshold] = {
+                'ws_bins': ws_bins,
+                'avg_yaw': avg_yaw,
+                'avg_vane': avg_vane,
+                'bin_yaw_ws': bin_yaw_ws,
+                'conf_int': percentile_results,
+                }
+                
+                
+            else: 
+                avg_yaw = yaw_mis.yaw_misalignment[i]
+                bin_yaw_ws = yaw_mis.yaw_misalignment_ws[i]
+                avg_vane = yaw_mis.mean_vane_angle_ws[i]
+
+                summary_df.loc[t, n_zones+1, pitch_threshold] = {
+                'ws_bins': ws_bins,
+                'avg_yaw': avg_yaw,
+                'avg_vane': avg_vane,
+                'bin_yaw_ws': bin_yaw_ws,
+                }
+        zone_plots = yaw_mis.plot_yaw_misalignment_by_turbine(return_fig = True)    
+        for key, value in zone_plots.items():
+            plots_yaw.loc[key, n_zones+1, pitch_threshold] = value
+    return summary_df, plots_yaw  
+
+def process_wake_free_zones(zones: list, params: Params)-> pd.DataFrame:
+    UQ = params.UQ
+    asset = params.asset
+    ws_bins = params.ws_bins
+    pitch_threshold = params.pitch_threshold
+    
+    
+    for n_zone,  project_wake_free in enumerate(zones):
+    
+        path_power_curve = f'plots/wake_free_zone/{asset}/Zone_{n_zone+1}/zone_power_curve_pt_{pitch_threshold}.png'
+        path_pitch_angle = f'plots/wake_free_zone/{asset}/Zone_{n_zone+1}/zone_pitch_angle_pt_{pitch_threshold}.png'
+        plot_project_pwr_crv(project=project_wake_free, title=f"Zone {n_zone+1} - Power Curve (filtered)", path = path_power_curve)
+        plot_project_bld_ptch_ang(project=project_wake_free, title=f"Zone {n_zone+1} - Blade Pitch Angle vs Wind Speed (filtered)", path = path_pitch_angle)
+
+        #start the yaw misalignment analysis
+        yaw_mis = StaticYawMisalignment(plant=project_wake_free, turbine_ids=None, UQ=UQ,)
+        yaw_params = params.params_func(yaw_mis.run)
+        yaw_mis.run(**yaw_params)
+
+        if UQ:
+            summary_df = pd.DataFrame(columns=['zone', 'ws_bins', 'avg_yaw', 'avg_vane', 'bin_yaw_ws', 'conf_int'])
+
+        
+        else:
+            summary_df = pd.DataFrame(columns=['zone', 'ws_bins', 'avg_yaw', 'avg_vane', 'bin_yaw_ws'])
+
+            
+        for i, t in enumerate(yaw_mis.turbine_ids):
+            file_path = f'data/{asset}/wake_free/{n_zone+1}_zone_test_pt_{pitch_threshold}.csv' 
+            print(f"Overall yaw misalignment for Turbine {t}: {np.round(yaw_mis.yaw_misalignment[i],1)} degrees")
+            
+            if UQ: 
+                
+                percentile_results = []
+                for bin in range(yaw_mis.yaw_misalignment_ws.shape[2]):
+                    # Extract the nth measurements for the specific turbine and wind speed bin
+                    nth_measurements = yaw_mis.yaw_misalignment_ws[:, i, bin]
+
+                    # Calculate the 2.5th and 97.5th percentiles
+                    lower_percentile = np.percentile(nth_measurements, 2.5)
+                    upper_percentile = np.percentile(nth_measurements, 97.5)
+
+                    # Store the result in the list
+                    percentile_results.append([lower_percentile, upper_percentile])
+                avg_vane = np.nanmean(yaw_mis.mean_vane_angle_ws[:, i, :], 0)
+                bin_yaw_ws = np.nanmean(yaw_mis.yaw_misalignment_ws[:,i,:], 0)
+                avg_yaw = np.nanmean(yaw_mis.yaw_misalignment[:,0])
+                
                 summary_df.loc[t] = {
                 'zone': n_zone+1,
                 'ws_bins': ws_bins,
@@ -345,6 +410,97 @@ if __name__ == "__main__":
                 'bin_yaw_ws': bin_yaw_ws,
                 }
             
-            summary_df.to_csv(file_path, index=True) 
-        axes_dict = yaw_mis.plot_yaw_misalignment_by_turbine(return_fig = True)
-        plt.show()
+            summary_df.to_csv(file_path, index=True)
+        axes_dict = yaw_mis.plot_yaw_misalignment_by_turbine(return_fig = True)    
+
+
+if __name__ == "__main__":
+    '''
+        DEFAULT PARAMETERS IN PARAMS CLASS
+        -------------------------------------
+        project = None 
+        pitch_threshold = []
+        num_sim = 100
+        power_bin_mad_thresh = 7
+        ws_bins = [5.0, 6.0, 7.0, 8.0]
+        ws_bin_width = 1.0
+        vane_bin_width = 1.0
+        min_vane_bin_count = 100
+        max_abs_vane_angle = 25.0
+        pitch_thresh = 0.5
+        max_power_filter = None
+        use_power_coeff = False
+        wake_free_zones = None
+        iterate = False
+        UQ = False
+        ------------------------------------
+        To change value pass them as kwargs to the class
+        e.g. Params(project = project, pitch_threshold = 1.5, num_sim = 100, power_bin_mad_thresh = 7)
+     '''
+    asset = "penmanshiel"
+    #first time run should be with load = True to create the data files
+    #after the first run, load = False will be much faster
+    
+    project = setup(time_range=(2019,2021), asset=asset, load=False)
+    p = "Penmanshiel"
+
+    wake_free_zones = {
+        1: {"turb": [f"{p} 01", f"{p} 04", f"{p} 08", f"{p} 12"], "wind_d_r": (278, 8)},
+        2: {"turb": [f"{p} 02", f"{p} 13", f"{p} 14", f"{p} 15"], "wind_d_r": (348, 93)},
+        3: {"turb": [f"{p} 07", f"{p} 11", f"{p} 15"], "wind_d_r": (87, 209)},
+        4: {"turb": [f"{p} 01", f"{p} 02"], "wind_d_r": (184, 274)}
+    }
+
+    ws_bins = [5.0, 6.0, 7.0, 8.0]
+    pitch_threshold = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2, 2.25]
+    ws_bin_width = 2.0
+    min_vane_bin_count = 50
+    UQ = True
+    iterate = True
+    use_power_coeff = False
+    
+    #fix problem with duplicated index
+    project.scada = project.scada[~project.scada.index.duplicated(keep='first')]
+    
+    #plot_project_bld_ptch_ang(project=project)
+        
+    
+
+    
+    if UQ:
+        num_sim = 100
+        max_power_filter = (0.92,0.98)
+        power_bin_mad_thresh = (4.0, 10.0)
+    else:
+        num_sim = 1
+        max_power_filter = 0.95
+        power_bin_mad_thresh = 7.0
+        
+    param_dict = {
+        'project': project,
+        'iterate': iterate,
+        'use_power_coeff': use_power_coeff,
+        'pitch_threshold': pitch_threshold,
+        'num_sim': num_sim,
+        'power_bin_mad_thresh': power_bin_mad_thresh,
+        'max_power_filter': max_power_filter,
+        'UQ': UQ,
+        'ws_bins': ws_bins,
+        'ws_bin_width': ws_bin_width,
+        'min_vane_bin_count': min_vane_bin_count,
+        'wake_free_zones': wake_free_zones,
+        'asset': asset,
+    }
+
+    # Create Params object
+    params = Params(**param_dict)
+
+    result, plots = iterate_parameters(project = project, params= params)
+    
+
+   
+    with open(f'data/{asset}/result_pt_dict.pkl', 'wb') as f:
+        pickle.dump(result, f)
+        
+    with open(f'data/{asset}/plots_pt_dict.pkl', 'wb') as g:
+        pickle.dump(plots, g)
