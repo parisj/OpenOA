@@ -1,9 +1,18 @@
 import csv
+import toml
 from inspect import signature
+from itertools import product
+from typing import Any, Dict, Iterator, Optional
+import os
 
 class Params:
-    def __init__(self, **kwargs):
-        self.project = None  # Type should be PlantData but set to None here
+    """
+    Class to manage simulation parameters.
+    """
+    def __init__(self, **kwargs: Any) -> None:
+        """
+        Initialize Params object with default values and update based on provided kwargs.
+        """
         self.pitch_threshold = []
         self.num_sim = 100
         self.power_bin_mad_thresh = 7
@@ -18,51 +27,60 @@ class Params:
         self.iterate = False
         self.UQ = False
         self.asset = 'kelmarsh'
-
+        
         # Update attributes based on provided kwargs
         self.__dict__.update(kwargs)
 
-    def save_to_csv(self, filename):
-        """Save the attributes to a CSV file."""
-        with open(filename, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(self.__dict__.keys())
-            writer.writerow(self.__dict__.values())
-
     @classmethod
-    def load_from_csv(cls, filename):
-        """Load attributes from a CSV file and return a new Params object."""
-        with open(filename, 'r', newline='') as csvfile:
-            reader = csv.reader(csvfile)
-            keys = next(reader)
-            values = next(reader)
-        kwargs = {key: value for key, value in zip(keys, values)}
-        return cls(**kwargs)
+    def load_from_toml(cls, filename: str) -> 'Params':
+ 
+        data = toml.load(filename)
+        fixed_params = data.get('fixed_params', {})
+        variable_params = data.get('variable_params', {})
+        
+        if not fixed_params and not variable_params:
+            raise ValueError("Both fixed_params and variable_params are empty.")
+        
+        return cls(**fixed_params), variable_params
 
-    def __str__(self):
-        """Return a string representation of the Params object."""
+    def yield_param_combinations(self, varying_params: Optional[Dict[str, list]] = None) -> Iterator[Dict[str, Any]]:
+
+        if varying_params is None:
+            yield self.__dict__.copy()
+            return
+
+        keys, values = zip(*varying_params.items())
+        for combination in product(*values):
+            temp_dict = self.__dict__.copy()
+            temp_dict.update(dict(zip(keys, combination)))
+            yield temp_dict
+
+    def __str__(self) -> str:
         return str(self.__dict__)
 
-    def update_params(self, **kwargs):
-        """Update attributes based on provided kwargs."""
+    def update_params(self, **kwargs: Any) -> None:
+
         self.__dict__.update(kwargs)
 
-    def params_func(self, func):
-        """Extract parameters from the Params object that are relevant to the given function."""
-        sig = signature(func)
-        param_names = list(sig.parameters.keys())
-        func_params = {k: v for k, v in self.__dict__.items() if k in param_names}
-        return func_params
+    def filter_params(func, params_dict):
+        """Filter out parameters from params_dict that are relevant to func."""
+        # Try to get the original, undecorated function if possible
+        original_func = getattr(func, '__wrapped__', func)
+        sig = signature(original_func)
+        param_names = set(sig.parameters.keys())
+        return {k: v for k, v in params_dict.items() if k in param_names}
+
     
-    
-def test_loading_params(project:str, pitch_threshold:list, wake_free_zones:dict): 
-    pass
 
 if __name__ == "__main__":
-    param_dict = {'project': "project", 'iterate': True}
-    params = Params(**param_dict)
-    print(params.__dict__)
+    # Test loading from TOML
+    os.chdir("/home/OST/anton.paris/WeDoWind")
 
-    # Method 2
-    params2 = Params(project="project", iterate=True)
-    print(params2.__dict__)
+    # Test loading from TOML
+    params, variable_params = Params.load_from_toml("code/settings.toml")
+    print("params: {params} \n")
+
+    # Test yielding parameter combinations
+    for count, param_combination in enumerate(params.yield_param_combinations(variable_params)):
+        print(f"count: {count}, params: {param_combination} \n")
+        

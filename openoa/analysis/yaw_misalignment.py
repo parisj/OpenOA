@@ -129,7 +129,10 @@ class StaticYawMisalignment(FromDictMixin):
         self, attribute: attrs.Attribute, value: PlantData
     ) -> None:
         """Validates that the value has been validated for a static yaw misalignment analysis."""
-        if set(("StaticYawMisalignment", "all")).intersection(value.analysis_type) == set():
+        if (
+            set(("StaticYawMisalignment", "all")).intersection(value.analysis_type)
+            == set()
+        ):
             raise TypeError(
                 "The input to 'plant' must be validated for at least 'StaticYawMisalignment'"
             )
@@ -139,13 +142,17 @@ class StaticYawMisalignment(FromDictMixin):
         """
         Initialize logging and post-initialization setup steps.
         """
-        logger.info("Initializing StaticYawMisalignment analysis object")
+        #logger.info("Initializing StaticYawMisalignment analysis object")
 
         # Check that selected UQ is allowed and reset num_sim if no UQ
-        if self.UQ:
-            logger.info("Note: uncertainty quantification will be performed in the calculation")
-        else:
-            logger.info("Note: uncertainty quantification will NOT be performed in the calculation")
+        #if self.UQ:
+        #    logger.info(
+        #        "Note: uncertainty quantification will be performed in the calculation"
+        #    )
+        #else:
+        #    logger.info(
+        #        "Note: uncertainty quantification will NOT be performed in the calculation"
+        #    )
 
         if self.turbine_ids is None:
             self.turbine_ids = list(self.plant.turbine_ids)
@@ -236,7 +243,9 @@ class StaticYawMisalignment(FromDictMixin):
             self._max_abs_vane_angle / self._vane_bin_width
         )
         self._vane_bins = np.arange(
-            -1 * max_abs_vane_angle_trunc, max_abs_vane_angle_trunc, self._vane_bin_width
+            -1 * max_abs_vane_angle_trunc,
+            max_abs_vane_angle_trunc,
+            self._vane_bin_width,
         ).tolist()
 
         # Set up Monte Carlo simulation inputs if UQ = True or single simulation inputs if UQ = False.
@@ -259,13 +268,21 @@ class StaticYawMisalignment(FromDictMixin):
                 # Estimate static yaw misalginment for each wind speed bin
                 for k, ws in enumerate(self.ws_bins):
                     self._df_turb_ws = self._df_turb.loc[
-                        (self._df_turb["WMET_HorWdSpd"] >= (ws - self._ws_bin_width / 2))
-                        & (self._df_turb["WMET_HorWdSpd"] < (ws + self._ws_bin_width / 2))
+                        (
+                            self._df_turb["WMET_HorWdSpd"]
+                            >= (ws - self._ws_bin_width / 2)
+                        )
+                        & (
+                            self._df_turb["WMET_HorWdSpd"]
+                            < (ws + self._ws_bin_width / 2)
+                        )
                     ].copy()
 
                     # Randomly resample 10-minute periods for bootstrapping
                     if self.UQ:
-                        self._df_turb_ws = self._df_turb_ws.sample(frac=1.0, replace=True)
+                        self._df_turb_ws = self._df_turb_ws.sample(
+                            frac=1.0, replace=True
+                        )
 
                     (
                         yaw_misalignment,
@@ -275,6 +292,12 @@ class StaticYawMisalignment(FromDictMixin):
                     ) = self._estimate_static_yaw_misalignment()
 
                     if self.UQ:
+                        """
+                        _curve_fit_params_ws[n,i,k,:] ->
+                                            [n = sim]
+                                            [i = turbines]
+                                            [k = wind speeds]
+                        """
                         self.yaw_misalignment_ws[n, i, k] = yaw_misalignment
                         self.mean_vane_angle_ws[n, i, k] = mean_vane_angle
                         self.power_values_vane_ws[n, i, k, :] = power_values_vane
@@ -286,8 +309,12 @@ class StaticYawMisalignment(FromDictMixin):
                         self._curve_fit_params_ws[i, k, :] = curve_fit_params
 
                 if self.UQ:
-                    self.yaw_misalignment[n, i] = np.mean(self.yaw_misalignment_ws[n, i, :])
-                    self.mean_vane_angle[n, i] = np.mean(self.mean_vane_angle_ws[n, i, :])
+                    self.yaw_misalignment[n, i] = np.mean(
+                        self.yaw_misalignment_ws[n, i, :]
+                    )
+                    self.mean_vane_angle[n, i] = np.mean(
+                        self.mean_vane_angle_ws[n, i, :]
+                    )
                 else:
                     self.yaw_misalignment[i] = np.mean(self.yaw_misalignment_ws[i, :])
                     self.mean_vane_angle[i] = np.mean(self.mean_vane_angle_ws[i, :])
@@ -317,7 +344,9 @@ class StaticYawMisalignment(FromDictMixin):
         if self.UQ:
             inputs = {
                 "power_bin_mad_thresh": np.random.randint(
-                    self._power_bin_mad_thresh[0], self._power_bin_mad_thresh[1] + 1, self.num_sim
+                    self._power_bin_mad_thresh[0],
+                    self._power_bin_mad_thresh[1] + 1,
+                    self.num_sim,
                 ),
                 "max_power_filter": np.random.randint(
                     self._max_power_filter[0] * 100,
@@ -330,7 +359,12 @@ class StaticYawMisalignment(FromDictMixin):
 
             # For saving power or power coefficient as a function of wind vane for each wind speed bin
             self.power_values_vane_ws = np.empty(
-                [self.num_sim, len(self.turbine_ids), len(self.ws_bins), len(self._vane_bins)]
+                [
+                    self.num_sim,
+                    len(self.turbine_ids),
+                    len(self.ws_bins),
+                    len(self._vane_bins),
+                ]
             )
 
             # For saving cosine curve fit parameters, yaw misalignment, and mean wind vane angle for each wind speed bin
@@ -351,9 +385,15 @@ class StaticYawMisalignment(FromDictMixin):
             self.yaw_misalignment_avg = np.empty([len(self.turbine_ids)])
             self.yaw_misalignment_std = np.empty([len(self.turbine_ids)])
             self.yaw_misalignment_95ci = np.empty([len(self.turbine_ids), 2])
-            self.yaw_misalignment_avg_ws = np.empty([len(self.turbine_ids), len(self.ws_bins)])
-            self.yaw_misalignment_std_ws = np.empty([len(self.turbine_ids), len(self.ws_bins)])
-            self.yaw_misalignment_95ci_ws = np.empty([len(self.turbine_ids), len(self.ws_bins), 2])
+            self.yaw_misalignment_avg_ws = np.empty(
+                [len(self.turbine_ids), len(self.ws_bins)]
+            )
+            self.yaw_misalignment_std_ws = np.empty(
+                [len(self.turbine_ids), len(self.ws_bins)]
+            )
+            self.yaw_misalignment_95ci_ws = np.empty(
+                [len(self.turbine_ids), len(self.ws_bins), 2]
+            )
 
         elif not self.UQ:
             inputs = {
@@ -368,9 +408,15 @@ class StaticYawMisalignment(FromDictMixin):
             )
 
             # For saving cosine curve fit parameters, yaw misalignment, and mean wind vane angle for each wind speed bin
-            self._curve_fit_params_ws = np.empty([len(self.turbine_ids), len(self.ws_bins), 3])
-            self.yaw_misalignment_ws = np.empty([len(self.turbine_ids), len(self.ws_bins)])
-            self.mean_vane_angle_ws = np.empty([len(self.turbine_ids), len(self.ws_bins)])
+            self._curve_fit_params_ws = np.empty(
+                [len(self.turbine_ids), len(self.ws_bins), 3]
+            )
+            self.yaw_misalignment_ws = np.empty(
+                [len(self.turbine_ids), len(self.ws_bins)]
+            )
+            self.mean_vane_angle_ws = np.empty(
+                [len(self.turbine_ids), len(self.ws_bins)]
+            )
 
             # For saving yaw misalignment and mean wind vane angle averaged over all wind speed bins
             self.yaw_misalignment = np.empty([len(self.turbine_ids)])
@@ -392,8 +438,10 @@ class StaticYawMisalignment(FromDictMixin):
         """
 
         # Limit to pitch angles below the specified threshold
-        self._df_turb = self._df_turb.loc[self._df_turb["WROT_BlPthAngVal"] <= self._pitch_thresh]
-        self._df_turb = self._df_turb[~self._df_turb.index.duplicated(keep='first')]
+        self._df_turb = self._df_turb.loc[
+            self._df_turb["WROT_BlPthAngVal"] <= self._pitch_thresh
+        ]
+        self._df_turb = self._df_turb[~self._df_turb.index.duplicated(keep="first")]
         self._df_turb = self._df_turb.dropna()
         # Apply bin-based filter to flag samples for which wind speed is greater than a threshold from the median
         # wind speed in each power bin
@@ -455,7 +503,10 @@ class StaticYawMisalignment(FromDictMixin):
 
         # Find best fit cosine curve parameters
         curve_fit_params, _ = curve_fit(
-            cos_curve, df_bin.index, df_bin["pow_ratio"], [df_bin["pow_ratio"].max(), 0.0, 2.0]
+            cos_curve,
+            df_bin.index,
+            df_bin["pow_ratio"],
+            [df_bin["pow_ratio"].max(), 0.0, 2.0],
         )
 
         # yaw_misalignment, mean_vane_angle, curve_fit_params, power_values_vane
