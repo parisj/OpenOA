@@ -45,7 +45,7 @@ class Params:
 
     def yield_param_combinations(self, varying_params: Optional[Dict[str, list]] = None) -> Iterator[Dict[str, Any]]:
 
-        if varying_params is None:
+        if varying_params is None or len(varying_params) == 0:
             yield self.__dict__.copy()
             return
 
@@ -59,7 +59,6 @@ class Params:
         return str(self.__dict__)
 
     def update_params(self, **kwargs: Any) -> None:
-
         self.__dict__.update(kwargs)
 
     def filter_params(func, params_dict):

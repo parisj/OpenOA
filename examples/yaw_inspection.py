@@ -12,7 +12,7 @@ from params import Params
 from scipy.stats import weibull_min
 from scipy.optimize import curve_fit
 import matplotlib
-
+from typing import List, Dict
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 from bokeh.plotting import show
@@ -62,6 +62,15 @@ def read_and_convert_to_parquet(asset: str) -> None:
 
 
 def load_data(asset: str = "kelmarsh") -> None:
+    """
+    Loads and prepares data for a given asset, then saves them to CSV and Pickle files.
+
+    Parameters:
+    asset (str): The name of the asset for which to load data. Default is "kelmarsh".
+
+    Returns:
+    None: The function saves the data to files and does not return anything.
+    """
     sc_df, met_df, cur_df, as_df, re_dict = project_Cubico.prepare(
         asset=asset, return_value="dataframes"
     )
@@ -74,7 +83,17 @@ def load_data(asset: str = "kelmarsh") -> None:
 
 
 def read_data(time_range: Union[Tuple[int, int], int], asset: str) -> PlantData:
-    # import the data
+    """
+    Reads various datasets for a specific asset and time range, and encapsulates them in a PlantData object.
+    
+    Parameters:
+    time_range (Union[Tuple[int, int], int]): Either a tuple specifying the start and end years or a single year.
+    asset (str): The name of the asset for which to read data.
+
+    Returns:
+    PlantData: An object containing all the loaded data.
+    """    
+
     sc_df = pd.read_parquet(f"data/{asset}/scada_df.parquet")
     met_df = pd.read_parquet(f"data/{asset}/meter_df.parquet")
     cur_df = pd.read_parquet(f"data/{asset}/curtail_df.parquet")
@@ -132,6 +151,27 @@ def plot_farm_2d(
     path: str = None,
     **kwargs,
 ) -> None:
+    """
+    Plots 2D scatter plots for turbines in a wind farm.
+
+    Parameters:
+    project (PlantData): The project object containing turbine data.
+    x (str): The column name in the data for the x-axis.
+    y (str): The column name in the data for the y-axis.
+    x_title (str): The title for the x-axis.
+    y_title (str): The title for the y-axis.
+    f_size_x (int): The figure size in the x-direction.
+    f_size_y (int): The figure size in the y-direction.
+    x_lim (Optional[Tuple[float, float]]): The limits for the x-axis.
+    y_lim (Optional[Tuple[float, float]]): The limits for the y-axis.
+    flag (Optional[Dict]): Dictionary of flags for highlighting specific data points.
+    title_fig (Optional[str]): The title for the entire figure.
+    path (Optional[str]): The path to save the figure.
+    kwargs (Any): Additional keyword arguments for the scatter plot.
+
+    Returns:
+    None: This function plots the data but does not return any value.
+    """
     num_turbines = len(project.turbine_ids)
     num_columns = min(2, num_turbines)
     num_rows = math.ceil(num_turbines / num_columns)
@@ -189,7 +229,18 @@ def plot_farm_2d(
 def plot_project_bld_ptch_ang(
     project: PlantData, title: str = None, path: str = None
 ) -> None:
-    # plot blade pitch angle vs wind speed of all turbines in the project
+    """
+    Plots blade pitch angle against wind speed for all turbines in the given project.
+
+    Parameters:
+    project (PlantData): The project object containing turbine data.
+    title (Optional[str]): The title for the entire figure.
+    path (Optional[str]): The path to save the figure.
+
+    Returns:
+    None: This function plots the data but does not return any value.
+    """
+    
     plot_farm_2d(
         project=project,
         x="WMET_HorWdSpd",
@@ -209,6 +260,19 @@ def plot_project_bld_ptch_ang(
 def plot_project_pwr_crv(
     project: PlantData, flag: dict = None, title: str = None, path: str = None, **kwargs
 ) -> None:
+    """
+    Plots the power curve, i.e., power vs wind speed, for all turbines in the given project.
+
+    Parameters:
+    project (PlantData): The project object containing turbine data.
+    flag (Optional[Dict]): Dictionary of flags for highlighting specific data points.
+    title (Optional[str]): The title for the entire figure.
+    path (Optional[str]): The path to save the figure.
+    kwargs (Any): Additional keyword arguments for the scatter plot.
+
+    Returns:
+    None: This function plots the data but does not return any value.
+    """
     plot_farm_2d(
         project=project,
         x="WMET_HorWdSpd",
@@ -228,6 +292,18 @@ def plot_project_pwr_crv(
 def setup(
     time_range: Union[Tuple[int, int], int], asset: str, load: bool = True
 ) -> PlantData:
+    """
+    Initializes a PlantData project by either loading or reading data, and sets its analysis type.
+
+    Parameters:
+    time_range (Union[Tuple[int, int], int]): Either a tuple of start and end year or a single year to filter data.
+    asset (str): The asset name corresponding to the data to be loaded or read.
+    load (bool): Whether to load data. If set to True, the load_data function is called.
+
+    Returns:
+    PlantData: A PlantData object with the loaded or read data, set for 'StaticYawMisalignment' analysis.
+    """
+
     if load:
         load_data(asset=asset)
 
@@ -238,6 +314,17 @@ def setup(
 
 
 def filter_wake_free_zones(project: PlantData, wake_free_zones: dict) -> PlantData:
+    """
+    Filters data from a PlantData project based on defined wake-free zones.
+    
+    Parameters:
+    project (PlantData): The PlantData project containing all turbine data.
+    wake_free_zones (Dict[str, Dict]): A dictionary containing the zones to filter.
+        Expected keys for each zone dict are "turb" for turbines and "wind_d_r" for wind direction range.
+
+    Returns:
+    List[PlantData]: A list of PlantData projects, each corresponding to a filtered wake-free zone.
+    """
     zones = []
 
     for zone, info in wake_free_zones.items():
@@ -272,6 +359,22 @@ def filter_wake_free_zones(project: PlantData, wake_free_zones: dict) -> PlantDa
 def filter_data(
     project: PlantData, pitch_threshold: float = 1.5, power_bin_mad_thresh: float = 7.0
 ) -> list:
+    """
+    Filters turbine data based on multiple criteria.
+    - Power curve window range flag
+    - Power curve bin filter
+    - Unresponsive flag wind speed measurement
+    - Power curve bin filter
+
+    Parameters:
+    project (PlantData): The PlantData object containing all turbine data.
+    pitch_threshold (float): The threshold for the blade pitch angle. Default is 1.5.
+    power_bin_mad_thresh (float): The threshold for the power bin mean absolute deviation. Default is 7.0.
+
+    Returns:
+    Dict[str, pd.Series]: A dictionary containing the bin filter flags for each turbine.
+    """
+    
     flag_bins = {}
 
     for t in project.turbine_ids:
@@ -293,12 +396,14 @@ def filter_data(
             "all",
         )
         df_sub = df_sub[~bin_outliers]
+
+        #unresponsive flag
         frozen = filters.unresponsive_flag(df_sub["WMET_HorWdSpd"], 3)
         df_sub = df_sub[~frozen]
         df_sub = df_sub[df_sub["WROT_BlPthAngVal"] <= pitch_threshold]
         project.scada.loc[(slice(None), t), :] = df_sub
 
-        # Apply power bin filter
+
         turb_capac = project.asset.loc[t, "rated_power"]
         flag_bin = filters.bin_filter(
             bin_col=df_sub["WTUR_W"],
@@ -317,34 +422,19 @@ def filter_data(
     return flag_bins
 
 
-# def iterate_parameters(project: PlantData, params: Params) -> pd.DataFrame:
-#    summary_df = pd.DataFrame(columns=["turbine", "pitch_angle", 'zone', 'ws_bins', 'avg_yaw', 'avg_vane', 'bin_yaw_ws', 'conf_int'])
-#    summary_df = summary_df.set_index(["turbine", "zone", "pitch_angle"])
-#    plots_yaw = pd.DataFrame(columns=["turbine", "zone", "pitch_angle", "figure", "axes"])
-#    plots_yaw = plots_yaw.set_index(["turbine", "zone", "pitch_angle"])
-#
-#    if params.iterate:
-#        def process_single_pitch(pt):
-#            params_new = copy.deepcopy(params)
-#            params_new.update_params(pitch_threshold=pt)
-#
-#            return process_wake_free_zones_with_parameters(project=project, params=params_new, summary_df=summary_df, plots_yaw=plots_yaw)
-#
-#        with concurrent.futures.ThreadPoolExecutor() as executor:
-#            pitch_thresholds = params.pitch_threshold
-#            results = list(executor.map(process_single_pitch, pitch_thresholds))
-#
-#        for result_summary_df, result_plots_yaw in results:
-#            summary_df = pd.concat([summary_df, result_summary_df])
-#            plots_yaw = pd.concat([plots_yaw, result_plots_yaw])
-#
-#    else:
-#        summary_df, plots_yaw = process_wake_free_zones_with_parameters(project=project, params=params, summary_df=summary_df, plots_yaw=plots_yaw)
-#
-#    return summary_df, plots_yaw
-#
-# @njit(parallel = True)
 def iterate_parameters(project: PlantData, params: Params, variables: dict) -> pd.DataFrame:
+    """
+    Iterates through different parameter combinations to process each zone.
+
+    Parameters:
+    project (PlantData): The PlantData object containing all turbine data.
+    params (Params): Object containing methods to yield parameter combinations.
+    variables (Dict): Dictionary of variables used for parameter combinations.
+
+    Returns:
+    Tuple[pd.DataFrame, pd.DataFrame]: DataFrames summarizing the analysis and plots for yaw angles.
+    """
+
     parameter_iter = params.yield_param_combinations(variables)
     summary_df, plots_yaw = create_dataframes(variables)
     
@@ -361,7 +451,15 @@ def iterate_parameters(project: PlantData, params: Params, variables: dict) -> p
     return summary_df, plots_yaw
 
 def filter_params_for_yaw_mis_run(params_dict: dict)-> dict:
-    
+    """
+    Filters out invalid keys from the parameter dictionary for StaticYawMisalignment.run()
+
+    Parameters:
+    params_dict (Dict[str, any]): Original parameter dictionary.
+
+    Returns:
+    Dict[str, any]: new params_dict with only valid keys 
+    """
     valid_keys = [
         'num_sim', 'ws_bins', 'ws_bin_width', 'vane_bin_width', 
         'min_vane_bin_count', 'max_abs_vane_angle', 'pitch_thresh', 
@@ -369,7 +467,17 @@ def filter_params_for_yaw_mis_run(params_dict: dict)-> dict:
     ]
     return {k: v for k, v in params_dict.items() if k in valid_keys}
 
-def create_dataframes(variable_params):
+def create_dataframes(variable_params: Union[dict, List[str]])-> tuple:
+    """
+    Creates summary and plot DataFrames with dynamic index columns.
+    Dynamic based on entries of variable params. 
+
+    Parameters:
+    variable_params (Union[Dict, List[str]]): A dictionary or list containing variable parameter names.
+
+    Returns:
+    tuple: A tuple containing two DataFrames: summary_df and plots_yaw.
+    """
 
     # Always include these columns
     fixed = ['turbine', 'zone']
@@ -390,14 +498,26 @@ def create_dataframes(variable_params):
     
     return summary_df, plots_yaw
 
-def process_each_zone(project: PlantData, params: dict, variables: dict, summary_df: pd.DataFrame, plots_yaw: pd.DataFrame):
+def process_each_zone(project: PlantData, params: dict, variables: dict, summary_df: pd.DataFrame, plots_yaw: pd.DataFrame) -> None:
+    """
+    Process each wake-free zone and update summary and plots DataFrames.
+    
+    Parameters:
+        project (PlantData): The project object containing the plant data.
+        params (dict): A dictionary of parameters related to wake-free zones, pitch thresholds, etc.
+        variables (dict): A dictionary of variable parameters.
+        summary_df (pd.DataFrame): DataFrame to store summary data.
+        plots_yaw (pd.DataFrame): DataFrame to store plot data.
+        
+    Returns:
+        None: This function modifies summary_df and plots_yaw in place.
+    """
+    
     zones = filter_wake_free_zones(project=project, wake_free_zones=params['wake_free_zones'])
     filter_data(
         project=project, pitch_threshold=params['pitch_threshold'], power_bin_mad_thresh=params['power_bin_mad_thresh']
     )
         
-  
-    
     for n_zones, project_wake_free in enumerate(zones):
         weibull_bin_weights = calculate_bin_weights(project_wake_free,"WMET_HorWdSpd",params['ws_bins'])
         yaw_mis = process_zone_plots(project_wake_free, params, n_zones, summary_df, plots_yaw)
@@ -407,8 +527,21 @@ def process_each_zone(project: PlantData, params: dict, variables: dict, summary
     
 
 
-def update_summary_and_plots(yaw_mis, params, n_zones, summary_df, plots_yaw, weibull_bin_weight):
-
+def update_summary_and_plots(yaw_mis: StaticYawMisalignment, params: dict, n_zones: int, summary_df: pd.DataFrame, plots_yaw: pd.DataFrame, weibull_bin_weights: dict )->None:
+    """
+    Update the summary and plots DataFrames with yaw misalignment analysis results.
+    
+    Parameters:
+        yaw_mis (StaticYawMisalignment): An object containing yaw misalignment data.
+        params (Dict): A dictionary containing parameters.
+        n_zones (int): Zone number.
+        summary_df (pd.DataFrame): DataFrame for storing summary data.
+        plots_yaw (pd.DataFrame): DataFrame for storing plot data.
+        weibull_bin_weights (Dict): Dictionary of Weibull bin weights.
+    
+    Returns:
+        None: The function updates summary_df and plots_yaw in place.
+    """
     dynamic_index = tuple(params[key] for key in sorted(variable_params.keys()))
     ws_bins = params["ws_bins"]
     UQ = params['UQ']
@@ -435,7 +568,7 @@ def update_summary_and_plots(yaw_mis, params, n_zones, summary_df, plots_yaw, we
             bin_yaw_ws = yaw_mis.yaw_misalignment_ws[i]
             avg_vane = yaw_mis.mean_vane_angle_ws[i]
             
-        static_yaw = calculate_weighted_yaw_mean(bin_yaw_ws, weibull_bin_weight, ws_bins)
+        static_yaw = calculate_weighted_yaw_mean(bin_yaw_ws, weibull_bin_weights, ws_bins)
         location = (t, n_zones + 1) + dynamic_index
         summary_df.loc[location] = {
             "ws_bins": ws_bins,
@@ -451,12 +584,25 @@ def update_summary_and_plots(yaw_mis, params, n_zones, summary_df, plots_yaw, we
         location = (key, n_zones + 1) + dynamic_index
         plots_yaw.loc[location] = value
         
-def process_zone_plots(project_wake_free, params, n_zones, summary_df, plots_yaw):
+def process_zone_plots(project_wake_free: PlantData, params: dict, n_zones: int, summary_df: pd.DataFrame, plots_yaw: pd.DataFrame) -> StaticYawMisalignment:
+    """
+    Process plots and perform yaw misalignment analysis for each zone.
 
+    Parameters:
+        project_wake_free (PlantData): The data of the wake-free zone turbine group.
+        params (Dict): A dictionary containing simulation parameters.
+        n_zones (int): The zone number.
+        summary_df (pd.DataFrame): DataFrame for storing summary data.
+        plots_yaw (pd.DataFrame): DataFrame for storing plot data.
+
+    Returns:
+        StaticYawMisalignment: An object containing yaw misalignment analysis.
+    """
     UQ = params['UQ']
     asset = params['asset']
     ws_bins = params['ws_bins']
     pitch_threshold = params['pitch_threshold']
+
     path_power_curve = f"plots/wake_free_zone/{asset}/Zone_{n_zones+1}/zone_power_curve_pt_{pitch_threshold}.png"
     path_pitch_angle = f"plots/wake_free_zone/{asset}/Zone_{n_zones+1}/zone_pitch_angle_pt_{pitch_threshold}.png"
     
@@ -477,11 +623,21 @@ def process_zone_plots(project_wake_free, params, n_zones, summary_df, plots_yaw
     yaw_mis.run(**param_dict)
     return yaw_mis
     
-def weibull_pdf(x, c, scale):
-    """Weibull PDF function."""
+def  weibull_pdf(x: Union[float, np.ndarray], c: float, scale: float) -> Union[float, np.ndarray]:
+    """
+    Calculate the probability density function (PDF) of a Weibull distribution.
+
+    Parameters:
+    - x (Union[float, np.ndarray]): The input value(s) for which the PDF is calculated.
+    - c (float): The shape parameter of the Weibull distribution. Must be positive.
+    - scale (float): The scale parameter of the Weibull distribution. Must be positive.
+
+    Returns:
+    - Union[float, np.ndarray]: The PDF value(s) for the given x.
+    """
     return (c / scale) * (x / scale)**(c - 1) * np.exp(-((x / scale)**c))
 
-def calculate_bin_weights(df, ws_column, ws_bins):
+def calculate_bin_weights(df: pd.DataFrame, ws_column: str, ws_bins: List[float]) -> Dict[float, float]:
     """
     Calculate Weibull weights for each wind speed bin.
 
@@ -495,11 +651,10 @@ def calculate_bin_weights(df, ws_column, ws_bins):
     """
     # Extract wind speed data
     wind_speed_data = df.scada[ws_column].dropna().values
-    
+    bins_size = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
     # Fit Weibull distribution to data
-    hist, bin_edges = np.histogram(wind_speed_data, bins=50, density=True)
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-    params, _ = curve_fit(weibull_pdf, bin_centers, hist)
+    counts, bins = np.histogram(wind_speed_data, bins= bins_size, density=True)
+    params, _ = curve_fit(weibull_pdf, bins[0:-1], counts)
     c, scale = params
 
     # Calculate Weibull CDF at bin edges
@@ -517,110 +672,28 @@ def calculate_bin_weights(df, ws_column, ws_bins):
 
     return weight_dict
     
-def calculate_weighted_yaw_mean(yaw_misalignment_ws, weibull_weights, ws_bins):
+def calculate_weighted_yaw_mean(yaw_misalignment_ws: Dict[float, float], weibull_weights: Dict[float, float], ws_bins: list) -> float:
     """
     Calculate the weighted yaw misalignment mean using Weibull weights.
 
     Parameters:
-    - yaw_misalignment_dict (dict): Dictionary containing yaw misalignment for each wind speed bin.
-    - weibull_weights (dict): Dictionary containing Weibull weights for each wind speed bin.
+
+        - weibull_weights (dict): Dictionary containing Weibull weights for each wind speed bin.
 
     Returns:
-    - float: Weighted yaw misalignment mean.
+    - float: Weighted yaw misalignment mean.ddd
     """
-    # Step 2: Filter out the weights for which we have yaw misalignment data
+    # Filter out the weights for which we have yaw misalignment data
     filtered_weights = {k: weibull_weights[k] for k in ws_bins}
 
-    # Step 3: Normalize these filtered weights
+    # Normalize these filtered weights
     total_weight = sum(filtered_weights.values())
     normalized_weights = {k: v / total_weight for k, v in filtered_weights.items()}
 
-    # Step 4: Calculate the weighted mean
-    weighted_yaw_mean = sum(yaw_misalignment_ws[k] * normalized_weights[k] for k in normalized_weights)
+    # Calculate the weighted mean
+    weighted_yaw_mean = sum(yaw_misalignment_ws[i] * normalized_weights[int(k)] for i, k in enumerate(normalized_weights))
 
     return weighted_yaw_mean
-
-## Example usage
-#yaw_misalignment_dict = {5.0: 2.0, 6.0: 1.5, 7.0: 1.0}  # Yaw misalignment values for some wind speed bins
-#weibull_weights = {5.0: 0.2, 6.0: 0.3, 7.0: 0.1, 8.0: 0.4}  # Weibull weights for all wind speed bins
-#
-#weighted_yaw_mean = calculate_weighted_yaw_mean(yaw_misalignment_dict, weibull_weights)
-#print("Weighted yaw misalignment mean:", weighted_yaw_mean)
-        
-# def process_wake_free_zones(zones: list, params: Params)-> pd.DataFrame:
-#    UQ = params.UQ
-#    asset = params.asset
-#    ws_bins = params.ws_bins
-#    pitch_threshold = params.pitch_threshold
-#
-#
-#    for n_zone,  project_wake_free in enumerate(zones):
-#
-#        path_power_curve = f'plots/wake_free_zone/{asset}/Zone_{n_zone+1}/zone_power_curve_pt_{pitch_threshold}.png'
-#        path_pitch_angle = f'plots/wake_free_zone/{asset}/Zone_{n_zone+1}/zone_pitch_angle_pt_{pitch_threshold}.png'
-#        plot_project_pwr_crv(project=project_wake_free, title=f"Zone {n_zone+1} - Power Curve (filtered)", path = path_power_curve)
-#        plot_project_bld_ptch_ang(project=project_wake_free, title=f"Zone {n_zone+1} - Blade Pitch Angle vs Wind Speed (filtered)", path = path_pitch_angle)
-#
-#        #start the yaw misalignment analysis
-#        yaw_mis = StaticYawMisalignment(plant=project_wake_free, turbine_ids=None, UQ=UQ,)
-#        yaw_params = params.params_func(yaw_mis.run)
-#        yaw_mis.run(**yaw_params)
-#
-#        if UQ:
-#            summary_df = pd.DataFrame(columns=['zone', 'ws_bins', 'avg_yaw', 'avg_vane', 'bin_yaw_ws', 'conf_int'])
-#
-#
-#        else:
-#            summary_df = pd.DataFrame(columns=['zone', 'ws_bins', 'avg_yaw', 'avg_vane', 'bin_yaw_ws'])
-#
-#
-#        for i, t in enumerate(yaw_mis.turbine_ids):
-#            file_path = f'data/{asset}/wake_free/{n_zone+1}_zone_test_pt_{pitch_threshold}.csv'
-#            print(f"Overall yaw misalignment for Turbine {t}: {np.round(yaw_mis.yaw_misalignment[i],1)} degrees")
-#
-#            if UQ:
-#
-#                percentile_results = []
-#                for bin in range(yaw_mis.yaw_misalignment_ws.shape[2]):
-#                    # Extract the nth measurements for the specific turbine and wind speed bin
-#                    nth_measurements = yaw_mis.yaw_misalignment_ws[:, i, bin]
-#
-#                    # Calculate the 2.5th and 97.5th percentiles
-#                    lower_percentile = np.percentile(nth_measurements, 2.5)
-#                    upper_percentile = np.percentile(nth_measurements, 97.5)
-#
-#                    # Store the result in the list
-#                    percentile_results.append([lower_percentile, upper_percentile])
-#                avg_vane = np.nanmean(yaw_mis.mean_vane_angle_ws[:, i, :], 0)
-#                bin_yaw_ws = np.nanmean(yaw_mis.yaw_misalignment_ws[:,i,:], 0)
-#                avg_yaw = np.nanmean(yaw_mis.yaw_misalignment[:,0])
-#
-#                summary_df.loc[t] = {
-#                'zone': n_zone+1,
-#                'ws_bins': ws_bins,
-#                'avg_yaw': avg_yaw,
-#                'avg_vane': avg_vane,
-#                'bin_yaw_ws': bin_yaw_ws,
-#                'conf_int': percentile_results,
-#                }
-#
-#
-#            else:
-#                avg_yaw = yaw_mis.yaw_misalignment[i]
-#                bin_yaw_ws = yaw_mis.yaw_misalignment_ws[i]
-#                avg_vane = yaw_mis.mean_vane_angle_ws[i]
-#
-#                summary_df.loc[t] = {
-#                'zone': n_zone+1,
-#                'ws_bins': ws_bins,
-#                'avg_yaw': avg_yaw,
-#                'avg_vane': avg_vane,
-#                'bin_yaw_ws': bin_yaw_ws,
-#                }
-#
-#            summary_df.to_csv(file_path, index=True)
-#        axes_dict = yaw_mis.plot_yaw_misalignment_by_turbine(return_fig = True)
-
 
 if __name__ == "__main__":
     """
@@ -650,7 +723,7 @@ if __name__ == "__main__":
     profiler.enable()
   #  
     asset = "penmanshiel"
-    
+
   #  # first time run should be with load = True to create the data files
   #  # after the first run, load = False will be much faster
     project = setup(time_range=(2019, 2021), asset=asset, load=False)
@@ -662,6 +735,7 @@ if __name__ == "__main__":
     # plot_project_bld_ptch_ang(project=project)
 
     # Create Params object
+    # to simulate different params, follow description in code/settings.toml
     params, variable_params = Params.load_from_toml("code/settings.toml")
     result, plots = iterate_parameters(project=project, params=params, variables=variable_params)
 
@@ -670,6 +744,6 @@ if __name__ == "__main__":
 
     with open(f"data/{asset}/plots_pt_dict.pkl", "wb") as g:
         pickle.dump(plots, g)
-
+    os.sleep(1)
     profiler.disable()
     profiler.print_stats(sort='cumulative')
